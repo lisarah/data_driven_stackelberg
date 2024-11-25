@@ -41,6 +41,7 @@ def traj_gen(G, J, Q, R, x_0, tau, T, data_len, w=0, U_leader=None, noise=0,
     M = G.T.dot(Q_hat).dot(G) + R_hat
     
     if opp_type is opp.NEUTRAL:
+        # I can zero the x_0 and get rid of tau via the affine system approach
         MU_star = G.T.dot(Q_hat).dot(tau - J.dot(x_0)) 
         U_star = np.linalg.pinv(M).dot(MU_star)
     elif opp_type is opp.AGGRESSIVE:

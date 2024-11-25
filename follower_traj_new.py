@@ -47,6 +47,11 @@ X_neutral, H_neutral = hg.traj_gen(G, J, Q, R, x_0, tau, T, data_len,
 U_rand, H_urand = hg.leader_rand(data_len, y_0, u_len, T, noise=0)
 X_agg, H_agg = hg.traj_gen(G, J, Q, R, x_0, tau, T, data_len, 
                            U_leader=U_rand, opp_type=hg.opp.AGGRESSIVE)
+si = 0
+for x in X_agg:
+    x += -x_0[si%2]
+    si +=1
+
 # store data trajectories
 Xs = [X_neutral, X_agg] #
 Us = [U_leader, U_rand]
@@ -56,8 +61,8 @@ H_us = [H_u, H_urand]
 y_neutral = np.array([x for x in X_neutral[:x_len*T_prev]])
 y_agg = np.array([x for x in X_agg[:x_len*T_prev]])
 obs = [# not seeing leader
-       # y_neutral + obs_noise*(np.random.rand(x_len*T_prev) - 0.5),
-       y_agg + obs_noise*(np.random.rand(x_len*T_prev) - 0.5)]
+        # y_neutral + obs_noise*(np.random.rand(x_len*T_prev) - 0.5),
+       y_agg + 0*(np.random.rand(x_len*T_prev) - 0.5)]
        # # chasing leader
        # y_obs_ag, # + noise*(np.random.rand(x_len*T_prev) - 0.5),
        # # avoiding leader

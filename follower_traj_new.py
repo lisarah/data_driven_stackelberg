@@ -3,14 +3,19 @@ import numpy as np
 import matplotlib.pyplot as plt 
 import hankel_gen as hg
 
-def plot_traj(x_trajs):
+def plot_traj(x_trajs,legend=None):
     if type(x_trajs) is not list:
         x_trajs = [x_trajs]
+    if legend is None:
+        legend = ['' for _ in x_trajs]
     plt.figure()
-    for x_traj in x_trajs:
+    
+    for x_traj, l_i in zip(x_trajs, legend):
         cur_len = len(x_traj)
         plt.plot([x_traj[2*j] for j in range(int(cur_len/2))], 
-                 [x_traj[2*j+1] for j in range(int(cur_len/2))])
+                 [x_traj[2*j+1] for j in range(int(cur_len/2))], label=l_i)
+
+    plt.legend()
     plt.show(block=False)
 def recovery_norm(g, y, H_mat):
     return np.linalg.norm(H_mat.dot(g) - y)
@@ -41,28 +46,27 @@ U_leader, H_u = hg.leader_gen(data_len, y_0, u_len, T, noise=0)
 
 # follower trajectories 1) neutral, 2) aggressive, 3) adversarial
 Q = np.eye(2)
-R = np.eye(2)
+R = 10*np.eye(2)
 X_neutral, H_neutral = hg.traj_gen(G, J, Q, R, x_0, tau, T, data_len, 
                                    opp_type=hg.opp.NEUTRAL)
-U_rand, H_urand = hg.leader_rand(data_len, y_0, u_len, T, noise=0)
+# U_rand and H_urand is centered around x_0
+U_rand, H_urand = hg.leader_rand(data_len, y_0, x_0, u_len, T, noise=0)
+# X_agg/H_agg are centered around x_0 - follower's trajectory 
 X_agg, H_agg = hg.traj_gen(G, J, Q, R, x_0, tau, T, data_len, 
                            U_leader=U_rand, opp_type=hg.opp.AGGRESSIVE)
-si = 0
-for x in X_agg:
-    x += -x_0[si%2]
-    si +=1
-
 # store data trajectories
 Xs = [X_neutral, X_agg] #
 Us = [U_leader, U_rand]
 H_ys = [H_neutral, H_agg] #
 H_us = [H_u, H_urand]
 
+# y is historical follower behavior
 y_neutral = np.array([x for x in X_neutral[:x_len*T_prev]])
-y_agg = np.array([x for x in X_agg[:x_len*T_prev]])
-obs = [# not seeing leader
-        # y_neutral + obs_noise*(np.random.rand(x_len*T_prev) - 0.5),
-       y_agg + 0*(np.random.rand(x_len*T_prev) - 0.5)]
+# y_agg is observed follower behavior, is centered around x_0
+y_agg = np.array([x for x in X_agg[:x_len*T_prev]]) 
+observed_follower = [# not seeing leader
+       y_neutral + obs_noise*(np.random.rand(x_len*T_prev) - 0.5),
+       y_agg + obs_noise*(np.random.rand(x_len*T_prev) - 0.5)]
        # # chasing leader
        # y_obs_ag, # + noise*(np.random.rand(x_len*T_prev) - 0.5),
        # # avoiding leader
@@ -70,25 +74,46 @@ obs = [# not seeing leader
 
 H_prevs = []
 H_futs = []
-u_hist = []
-for H, H_u, U_l in zip(H_ys, H_us, Us):    
+H_u_futs = []
+observed_leader = []
+for H, H_u, U_l in zip(H_ys, H_us, Us):  
     H_yp = H[:T_prev*x_len, :]
     H_yf = H[T_prev*x_len:, :]
     H_up = H_u[:T_prev*u_len, :]
     H_uf = H_u[T_prev*u_len:, :]
     H_prevs.append(np.vstack((H_up, H_yp)))
     H_futs.append(H_yf)
-    u_hist.append(U_l[:u_len*T_prev])
-    
+    H_u_futs.append(H_uf)
+    # observed leader is not centered around x_0
+    observed_leader.append(U_l[:u_len*T_prev] )
+# generate g
+gs = []
+follower_prediction = []    
 for i in [0,1]:
-    # generate g
-    gs = []
-    y_preds = []
-    for H_prev, H_fut, ob, u_obs in zip(H_prevs, H_futs, obs, u_hist):
-        gs.append(np.linalg.pinv(H_prev).dot(np.hstack((u_obs, ob))))
-        y_preds.append(H_fut.dot(gs[-1]))
-        plot_traj([Xs[i], ob, y_preds[-1], u_obs])
-        print(f'recovery: {recovery_norm(gs[-1], y_preds[-1], H_fut)}')
+    H_prev = H_prevs[i]
+    H_fut = H_futs[i]
+    H_u_fut = H_u_futs[i]
+    f_t = observed_follower[i] # centerd around x_0
+    l_t = observed_leader[i] # centerd around x_0
+    historical_follower = Xs[i] # centered around x_0
+    # for H_prev, H_fut, ob, u_obs in zip(H_prevs, H_futs, obs, u_hist):
+    if i ==0: # neutral setting
+        gs.append(np.linalg.pinv(H_prev).dot(np.hstack((l_t, f_t))))
+        follower_prediction.append(H_fut.dot(gs[-1]))
+    elif i == 1:
+        f_t_hat = [f_t[i] + x_0[i%2] for i in range(len(f_t))]
+        # print(np.round(f_t_hat))
+        # l_t_hat = [l_t[i] + x_0[i%2] for i in range(len(l_t))]
+        # print(np.round(l_t_hat))
+        gs.append(np.linalg.pinv(H).dot(np.hstack((l_t, f_t))))
+        pred = H_fut.dot(gs[-1])
+        pred_u = H_u_fut.dot(gs[-1])
+        follower_prediction.append(pred)
+        # historical_follower +=  np.kron(x_0, np.ones(data_len))
+    legend = ['follower data', 'follower observation', 'follower prediction', 
+              'leader observation']
+    plot_traj([historical_follower, f_t, follower_prediction[-1], l_t],legend)
+    print(f'recovery: {recovery_norm(gs[-1], follower_prediction[-1], H_fut)}')
         
     
 # net_Hy = np.hstack(H_ys)   

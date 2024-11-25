@@ -41,16 +41,19 @@ def traj_gen(G, J, Q, R, x_0, tau, T, data_len, w=0, U_leader=None, noise=0,
     M = G.T.dot(Q_hat).dot(G) + R_hat
     
     if opp_type is opp.NEUTRAL:
-        # I can zero the x_0 and get rid of tau via the affine system approach
         MU_star = G.T.dot(Q_hat).dot(tau - J.dot(x_0)) 
         U_star = np.linalg.pinv(M).dot(MU_star)
+        X_star = G.dot(U_star) + J.dot(x_0)
     elif opp_type is opp.AGGRESSIVE:
-        MU_star = G.T.dot(Q_hat).dot(U_leader - J.dot(x_0) ) 
+        # MU_star = G.T.dot(Q_hat).dot(U_leader - J.dot(x_0) ) 
+        # U_star = np.linalg.pinv(M).dot(MU_star)
+        MU_star = G.T.dot(Q_hat).dot(U_leader) 
         U_star = np.linalg.pinv(M).dot(MU_star)
+        X_star = G.dot(U_star)  
     elif opp_type is opp.AVOID: 
         MU_star = G.T.dot(Q_hat.dot(J.dot(x_0) - J.dot(x_0)) - w*U_leader) 
         U_star = np.linalg.pinv(M).dot(MU_star)
-    X_star = G.dot(U_star) + J.dot(x_0)
+        X_star = G.dot(U_star) + J.dot(x_0)
     X_star = X_star[2:]
     return X_star, sp.hankel(X_star[:x_len*T], X_star[x_len*T:]) 
 
@@ -61,14 +64,15 @@ def tau_gen(x_0, data_len, delta):
     return tau
     
 def leader_gen(data_len, y_0, u_len, T, noise=0):
-    U_traj = [y_0 + np.array([-t, -t]) + noise*(np.random.rand(u_len) - 0.5) 
+    U_traj = [y_0 + np.array([-t,-t]) + noise*(np.random.rand(u_len)-0.5) 
           for t in range(data_len+1)]
     U_traj = np.concatenate(U_traj, axis=0)
     return U_traj, sp.hankel(U_traj[2:u_len*T+2], U_traj[u_len*T+2:])  
 
-def leader_rand(data_len, y_0, u_len, T, noise=0):
-    U_traj = [y_0 + np.array([-t, -t]) for t in range(int(data_len/2))]
-    U_traj2 = [U_traj[-1] + 2*(np.random.rand(u_len)-0.5*np.ones(2)) for t in range(data_len+1-int(data_len/2))]
+def leader_rand(data_len, y_0, x_0, u_len, T, noise=0):
+    U_traj = [y_0 - x_0 + np.array([-t, -t]) for t in range(int(data_len/2))]
+    U_traj2 = [U_traj[-1] + 1*(np.random.rand(u_len)-0.5*np.ones(2)) 
+               for t in range(data_len+1-int(data_len/2))]
     U_traj = np.concatenate(U_traj+U_traj2, axis=0)
     return U_traj, sp.hankel(U_traj[2:u_len*T+2], U_traj[u_len*T+2:])    
     

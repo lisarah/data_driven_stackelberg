@@ -81,23 +81,29 @@ def leader_rand(data_len, y_0, x_0, u_len, T, noise=0):
         U_traj2.append(U_traj2[-1]+ noise*(np.random.rand(u_len)-0.5*np.ones(2)) )
 
     U_traj = np.concatenate(U_traj+U_traj2, axis=0)
-    return U_traj, sp.hankel(U_traj[2:u_len*T+2], U_traj[u_len*T+2:])    
+    return U_traj, sp.hankel(U_traj[2:u_len*T+2], U_traj[u_len*T+2:])  
+  
+def deep_c(H_y, H_u, x_separation, u_separation):
+     H_yp = H_y[:x_separation, :]
+     H_yf = H_y[x_separation:, :]
+     H_up = H_u[:u_separation, :]
+     H_uf = H_u[u_separation:, :]
+     H_prev = np.vstack((H_up, H_yp, H_uf))
+     H_fut = H_yf
+     
+     return np.linalg.pinv(H_prev), H_fut
+ 
     
-# def aggressive_gen(data_len, x_len, u_len, T, x_0, tau=None, noise=0):
-    # A = np.eye(x_len)
-    # # A[0,1] = 0.2
-    # B = np.eye(u_len)
-    # G, J = GJ_gen(A,B, data_len)
+ 
     
-#     Q = np.eye(2)
-#     R = np.eye(2)
-#     Q_hat = np.kron(Q, np.eye(data_len + 1))
-#     R_hat = np.kron(R, np.eye(data_len))
-
-#     M = G.T.dot(Q_hat).dot(G) + R_hat
-#     U_star = np.linalg.inv(M).dot(G.T).dot(Q_hat).dot(tau - J.dot(x_0))
-#     X_star = G.dot(U_star) + J.dot(x_0)
-#     X_star = X_star[2:]
+ 
     
-#     # rank: np.linalg.matrix_rank(H_u)
-#     return sp.hankel(X_star[:x_len*T], X_star[x_len*T:])
+ 
+    
+ 
+    
+ 
+    
+ 
+    
+ 

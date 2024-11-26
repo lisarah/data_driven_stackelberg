@@ -47,7 +47,7 @@ y_0 = np.array([path_len, path_len])
 
 # follower trajectories 1) neutral, 2) aggressive, 3) adversarial
 Q = np.eye(2)
-R = 100*np.eye(2)
+R = 8*np.eye(2)
 # -------------- neutral follower ---------------------- #
 # X_neutral/H_neutral are ZEROed
 X_neutral, H_neutral = hg.traj_gen(G, J, Q, R, x_0, tau_hat, T, data_len, 
@@ -83,19 +83,15 @@ observed_follower = [# not seeing leader
        # # avoiding leader
        # y_obs_av] # + noise*(np.random.rand(x_len*T_prev) - 0.5)]
 
-H_prevs = []
+H_invs = []
 H_futs = []
-H_u_futs = []
 observed_leader = []
 future_leader = []
+
 for H, H_u, U_l in zip(H_ys, H_us, Us):  
-    H_yp = H[:x_len_obs, :]
-    H_yf = H[x_len_obs:, :]
-    H_up = H_u[:u_len_obs, :]
-    H_uf = H_u[u_len_obs:, :]
-    H_prevs.append(np.vstack((H_up, H_yp, H_uf)))
-    H_futs.append(H_yf)
-    H_u_futs.append(H_uf)
+    H_inv, H_fut = hg.deep_c(H, H_u, x_len_obs, u_len_obs)
+    H_invs.append(H_inv)
+    H_futs.append(H_fut)
     # observed leader is not centered around x_0
     observed_leader.append(U_l[:u_len_obs])
     future_leader.append(U_l[u_len_obs:2*u_len_obs])
@@ -103,17 +99,14 @@ for H, H_u, U_l in zip(H_ys, H_us, Us):
 gs = []
 follower_prediction = []    
 for i in [0,1]:
-    H_prev = H_prevs[i]
-    H_fut = H_futs[i]
-    H_u_fut = H_u_futs[i]
     l_future = future_leader[i]
     f_t_hat = observed_follower[i] # centered around x_0
     f_t = [f_t_hat[i] + x_0[i%2] for i in range(len(f_t_hat))]
     l_t_hat = observed_leader[i] # centered around x_0
     l_t = [l_t_hat[i] + x_0[i%2] for i in range(len(l_t_hat))] # not zeroed
     historical_follower = Xs[i] # centered around x_0
-    g = np.linalg.pinv(H_prev).dot(np.hstack((l_t_hat, f_t_hat,l_future)))
-    pred_f = H_fut.dot(g)
+    g = H_invs[i].dot(np.hstack((l_t_hat, f_t_hat,l_future)))
+    pred_f = H_futs[i].dot(g)
     follower_prediction.append(pred_f) # zeroed
     gs.append(g)
     legend = ['follower data', 'follower observation', 'follower prediction', 
@@ -122,22 +115,18 @@ for i in [0,1]:
                l_t_hat, l_future],legend)
     print(f'recovery: {recovery_norm(gs[-1], follower_prediction[-1], H_fut)}')
         
-    
-# net_Hy = np.hstack(H_ys)   
-# net_Hu = np.hstack((H_u, H_u, H_u))
-# H_up = net_Hu[:T_prev*u_len, :]
-# H_uf = net_Hu[T_prev*u_len:, :]
 
-# H_yp = net_Hy[:T_prev*x_len, :]
-# H_yf = net_Hy[T_prev*x_len:, :]
-# H_prev = np.vstack((H_up, H_yp))
-# g = np.linalg.pinv(H_prev).dot(np.hstack((u_obs, obs[0])))
-# y_pred = H_yf.dot(g)
-# plot_traj([X_star, obs[0], y_pred])
-# plot_traj([X_star, y_obs_ag, y_pred_ag])
-# plot_traj([X_star, y_obs_av, y_pred_av])
+net_Hy = np.hstack(H_ys)   
+net_Hu = np.hstack(H_us)
+H_inv, H_fut = hg.deep_c(net_Hy, net_Hu, x_len_obs, u_len_obs)
 
-# print(f'aggressive history recovery: {recovery_norm( g_ag, y_obs_ag, H_yp)}')
-# print(f'regular history recovery: {recovery_norm( g, y_obs, H_yp)}')
-# print(f'avoid history recovery: {recovery_norm( g_av, y_obs_av, H_yp)}')
-    
+for s_ind in [0,1]:
+
+    g = H_inv.dot(np.hstack((observed_leader[s_ind], observed_follower[s_ind],
+                              future_leader[s_ind])))
+    pred_f = H_fut.dot(g)
+    legend = ['follower data', 'follower observation', 'follower prediction', 
+              'leader observation', 'leader future']
+    plot_traj([Xs[s_ind], observed_follower[s_ind], pred_f, 
+                observed_leader[s_ind], future_leader[s_ind]],legend)
+

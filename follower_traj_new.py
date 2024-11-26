@@ -32,7 +32,7 @@ y_0 = np.array([path_len, path_len])
 
 # follower trajectories 1) neutral, 2) aggressive, 3) adversarial
 Q = np.eye(2)
-R = 6*np.eye(2)
+R = 100*np.eye(2)
 # -------------- neutral follower ---------------------- #
 # X_neutral/H_neutral are ZEROed
 X_neutral, H_neutral = hg.traj_gen(G, J, Q, R, x_0, tau_hat, T, data_len, 
@@ -46,11 +46,20 @@ U_rand, H_urand = hg.leader_rand(data_len, y_0, x_0, u_len, T, noise=1)
 # X_agg/H_agg are centered around x_0 - follower's trajectory 
 X_agg, H_agg = hg.traj_gen(G, J, Q, R, x_0, tau_hat, T, data_len, 
                            U_leader=U_rand, opp_type=hg.opp.AGGRESSIVE)
+
+# -------------- avoidant follower ------------------------ #
+# U_rand and H_urand is centered around x_0
+U_avoid, H_uavoid = hg.leader_rand(data_len, y_0, x_0, u_len, T, noise=1)
+# X_agg/H_agg are centered around x_0 - follower's trajectory 
+X_avoid, H_avoid = hg.traj_gen(G, J, Q, R, x_0, tau_hat, T, data_len, 
+                           U_leader=U_avoid, w=5e-1, 
+                           opp_type=hg.opp.AVOID)
+
 # store data trajectories
-Xs = [X_neutral, X_agg] # all zeroed
-Us = [U_leader, U_rand] # zeroed
-H_ys = [H_neutral, H_agg] # zeroed
-H_us = [H_u, H_urand] # zeroed
+Xs = [X_neutral, X_agg, X_avoid] # all zeroed
+Us = [U_leader, U_rand, U_avoid] # zeroed
+H_ys = [H_neutral, H_agg, H_avoid] # zeroed
+H_us = [H_u, H_urand, H_uavoid] # zeroed
 
 obs_noise=0
 T_obs = 10
@@ -60,9 +69,11 @@ u_len_obs = T_obs*u_len
 y_neutral_hat = np.array([x for x in X_neutral[:x_len_obs]])
 # y_agg is observed follower behavior, is centered around x_0
 y_agg_hat = np.array([x for x in X_agg[:x_len_obs]]) 
+y_avoid_hat = np.array([x for x in X_avoid[:x_len_obs]]) 
 observed_follower = [# not seeing leader
        y_neutral_hat + obs_noise*(np.random.rand(x_len_obs) - 0.5),
-       y_agg_hat + obs_noise*(np.random.rand(x_len_obs) - 0.5)]
+       y_agg_hat + obs_noise*(np.random.rand(x_len_obs) - 0.5),
+       y_avoid_hat + obs_noise*(np.random.rand(x_len_obs) - 0.5)]
        # # chasing leader
        # y_obs_ag, # + noise*(np.random.rand(x_len*T_prev) - 0.5),
        # # avoiding leader
@@ -83,7 +94,7 @@ for H, H_u, U_l in zip(H_ys, H_us, Us):
 # generate g
 gs = []
 follower_prediction = []    
-for i in [0,1]:
+for i in [2]:
     l_future = future_leader[i]
     f_t_hat = observed_follower[i] # centered around x_0
     f_t = [f_t_hat[i] + x_0[i%2] for i in range(len(f_t_hat))]
@@ -102,7 +113,7 @@ for i in [0,1]:
     print(f'recovery: {ut.recovery_norm(gs[-1], follower_prediction[-1], H_fut)}')
         
 # net H version
-test_net = True
+test_net = False
 net_f_pred = []
 if test_net:
     net_Hy = np.hstack(H_ys)   
@@ -121,7 +132,7 @@ if test_net:
         ut.plot_traj([Xs[s_ind], observed_follower[s_ind], pred_f,
                    observed_leader[s_ind], future_leader[s_ind]],legend)
 
-find_error = True
+find_error = False
 if find_error:
     errors = []
     e_nets = []
@@ -144,14 +155,14 @@ if find_error:
             iteration += 1
             print(f'last v_ground {v_ground}')
             print(f'last v_pred {v_pred}')
-plt.figure()
-legend = ['neutral', 'aggressive']            
-for i in range(2):
-    plt.plot(errors[i], label=legend[i])
-    plt.plot(e_nets[i], ':', label=legend[i]+' net')
-plt.legend()
-plt.grid()
-plt.show(block=False)
+    plt.figure()
+    legend = ['neutral', 'aggressive']            
+    for i in range(2):
+        plt.plot(errors[i], label=legend[i])
+        plt.plot(e_nets[i], ':', label=legend[i]+' net')
+    plt.legend()
+    plt.grid()
+    plt.show(block=False)
 
 
 

@@ -56,9 +56,8 @@ def traj_gen(G, J, Q, R, x_0, tau, T, data_len, w=0, U_leader=None, noise=0,
         U_star = np.linalg.pinv(M).dot(MU_star)
         X_star = G.dot(U_star)  
     elif opp_type is opp.AVOID: 
-        MU_star = G.T.dot(Q_hat.dot(J.dot(x_0) - J.dot(x_0)) - w*U_leader) 
-        U_star = np.linalg.pinv(M).dot(MU_star)
-        X_star = G.dot(U_star) + J.dot(x_0)
+        U_star = -w*np.linalg.inv(R_hat).dot(G.T).dot(U_leader)
+        X_star = G.dot(U_star)
     X_star = X_star[2:]
     return X_star, sp.hankel(X_star[:x_len*T], X_star[x_len*T:]) 
 

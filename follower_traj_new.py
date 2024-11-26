@@ -2,23 +2,8 @@
 import numpy as np
 import matplotlib.pyplot as plt 
 import hankel_gen as hg
+import util as ut
 
-def plot_traj(x_trajs,legend=None):
-    if type(x_trajs) is not list:
-        x_trajs = [x_trajs]
-    if legend is None:
-        legend = ['' for _ in x_trajs]
-    plt.figure()
-    
-    for x_traj, l_i in zip(x_trajs, legend):
-        cur_len = len(x_traj)
-        plt.plot([x_traj[2*j] for j in range(int(cur_len/2))], 
-                 [x_traj[2*j+1] for j in range(int(cur_len/2))], label=l_i)
-
-    plt.legend()
-    plt.show(block=False)
-def recovery_norm(g, y, H_mat):
-    return np.linalg.norm(H_mat.dot(g) - y)
     
 delta = 1 # time discretization
 T_fut = 10
@@ -47,7 +32,7 @@ y_0 = np.array([path_len, path_len])
 
 # follower trajectories 1) neutral, 2) aggressive, 3) adversarial
 Q = np.eye(2)
-R = 8*np.eye(2)
+R = 6*np.eye(2)
 # -------------- neutral follower ---------------------- #
 # X_neutral/H_neutral are ZEROed
 X_neutral, H_neutral = hg.traj_gen(G, J, Q, R, x_0, tau_hat, T, data_len, 
@@ -105,28 +90,68 @@ for i in [0,1]:
     l_t_hat = observed_leader[i] # centered around x_0
     l_t = [l_t_hat[i] + x_0[i%2] for i in range(len(l_t_hat))] # not zeroed
     historical_follower = Xs[i] # centered around x_0
+    # next time step is Xs[i][x_len_obs:x_len_obs+2]
     g = H_invs[i].dot(np.hstack((l_t_hat, f_t_hat,l_future)))
     pred_f = H_futs[i].dot(g)
     follower_prediction.append(pred_f) # zeroed
     gs.append(g)
     legend = ['follower data', 'follower observation', 'follower prediction', 
               'leader observation', 'leader future']
-    plot_traj([historical_follower, f_t_hat, follower_prediction[-1], 
+    ut.plot_traj([historical_follower, f_t_hat, follower_prediction[-1], 
                l_t_hat, l_future],legend)
-    print(f'recovery: {recovery_norm(gs[-1], follower_prediction[-1], H_fut)}')
+    print(f'recovery: {ut.recovery_norm(gs[-1], follower_prediction[-1], H_fut)}')
         
+# net H version
+test_net = True
+net_f_pred = []
+if test_net:
+    net_Hy = np.hstack(H_ys)   
+    net_Hu = np.hstack(H_us)
+    H_inv, H_fut = hg.deep_c(net_Hy, net_Hu, x_len_obs, u_len_obs)
+    
+    for s_ind in [0,1]:
+        g = H_inv.dot(np.hstack((observed_leader[s_ind], 
+                                 observed_follower[s_ind],
+                                 future_leader[s_ind])))
+        pred_f = H_fut.dot(g)
+        net_f_pred.append(pred_f)
+        legend = ['follower data', 'follower observation', 
+                  'follower prediction', 'leader observation', 
+                  'leader future']
+        ut.plot_traj([Xs[s_ind], observed_follower[s_ind], pred_f,
+                   observed_leader[s_ind], future_leader[s_ind]],legend)
 
-net_Hy = np.hstack(H_ys)   
-net_Hu = np.hstack(H_us)
-H_inv, H_fut = hg.deep_c(net_Hy, net_Hu, x_len_obs, u_len_obs)
+find_error = True
+if find_error:
+    errors = []
+    e_nets = []
+    for i in [0,1]:
+        errors.append([])
+        e_nets.append([])
+        ground_truth = Xs[i][x_len_obs:2*x_len_obs]
+        pred = follower_prediction[i]
+        net_pred = net_f_pred[i]
+        k = 0
+        iteration = 0
+        while k < len(pred):
+            print(f'iteration = {iteration}, k = {k}')
+            v_ground = ground_truth[k:k + x_len]
+            v_pred = pred[k:k + x_len]
+            v_net = net_pred[k:k + x_len]
+            errors[-1].append(np.linalg.norm(v_ground - v_pred))
+            e_nets[-1].append(np.linalg.norm(v_ground - v_net))
+            k += x_len
+            iteration += 1
+            print(f'last v_ground {v_ground}')
+            print(f'last v_pred {v_pred}')
+plt.figure()
+legend = ['neutral', 'aggressive']            
+for i in range(2):
+    plt.plot(errors[i], label=legend[i])
+    plt.plot(e_nets[i], ':', label=legend[i]+' net')
+plt.legend()
+plt.grid()
+plt.show(block=False)
 
-for s_ind in [0,1]:
 
-    g = H_inv.dot(np.hstack((observed_leader[s_ind], observed_follower[s_ind],
-                              future_leader[s_ind])))
-    pred_f = H_fut.dot(g)
-    legend = ['follower data', 'follower observation', 'follower prediction', 
-              'leader observation', 'leader future']
-    plot_traj([Xs[s_ind], observed_follower[s_ind], pred_f, 
-                observed_leader[s_ind], future_leader[s_ind]],legend)
 

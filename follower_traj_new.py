@@ -94,7 +94,7 @@ for H, H_u, U_l in zip(H_ys, H_us, Us):
 # generate g
 gs = []
 follower_prediction = []    
-for i in [2]:
+for i in [0,1]:
     l_future = future_leader[i]
     f_t_hat = observed_follower[i] # centered around x_0
     f_t = [f_t_hat[i] + x_0[i%2] for i in range(len(f_t_hat))]
@@ -113,11 +113,11 @@ for i in [2]:
     print(f'recovery: {ut.recovery_norm(gs[-1], follower_prediction[-1], H_fut)}')
         
 # net H version
-test_net = False
+test_net = True
 net_f_pred = []
 if test_net:
-    net_Hy = np.hstack(H_ys)   
-    net_Hu = np.hstack(H_us)
+    net_Hy = np.hstack(H_ys[:2])   
+    net_Hu = np.hstack(H_us[:2])
     H_inv, H_fut = hg.deep_c(net_Hy, net_Hu, x_len_obs, u_len_obs)
     
     for s_ind in [0,1]:
@@ -132,7 +132,7 @@ if test_net:
         ut.plot_traj([Xs[s_ind], observed_follower[s_ind], pred_f,
                    observed_leader[s_ind], future_leader[s_ind]],legend)
 
-find_error = False
+find_error = True
 if find_error:
     errors = []
     e_nets = []
